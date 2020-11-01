@@ -360,6 +360,8 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "cursive",
+ "serde",
+ "serde_json",
  "ureq",
 ]
 

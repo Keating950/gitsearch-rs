@@ -10,3 +10,5 @@ edition = "2018"
 cursive = "0"
 clap = "2"
 ureq = { version = "1", features = ["json"] }
+serde_json = "1"
+serde = { version = "1", features = ["derive"] }

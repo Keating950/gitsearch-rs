@@ -1,5 +1,7 @@
+use serde::{de, Deserialize, Deserializer};
+use serde_json::Value;
+use std::{io, str::FromStr, mem::replace};
 use crate::request::ENDPOINT;
-use std::{str::FromStr, mem::replace};
 
 pub trait ToQueryUrl {
     fn to_url(&self) -> Option<String>;
@@ -12,8 +14,13 @@ pub trait StringExt {
 impl StringExt for String {
     fn concat_if_some(&mut self, other: Option<String>) -> Self {
         match other {
-            Some(s) => std::mem::replace(self, self + s),
-            None => self
+            Some(s) =>  {
+                let mut new = String::with_capacity(self.len() + s.len());
+                new += self;
+                new += &s;
+                std::mem::replace(self, new)
+            },
+            None => self.to_string()
         }
     }
 }
@@ -24,6 +31,7 @@ impl ToQueryUrl for String {
     }
 }
 
+#[derive(Eq, PartialEq)]
 pub enum Sort {
     BestMatch,
     Stars,
@@ -48,7 +56,7 @@ impl FromStr for Sort {
 
 impl ToQueryUrl for Sort {
     fn to_url(&self) -> Option<String> {
-        if self == Sort::BestMatch {
+        if *self == Sort::BestMatch {
             None
         } else {
             Some(
@@ -82,5 +90,51 @@ impl ToQueryUrl for Query {
         query.concat_if_some(self.sort.to_url());
         if self.ascending { query += "&order=asc" }
         Some(query)
+    }
+}
+
+#[derive(Deserialize)]
+pub struct Repo {
+    pub id: u64,
+    pub full_name: String,
+    pub url: String,
+    pub description: Option<String>,
+    pub stargazers_count: i64,
+    pub language: Option<String>,
+    pub forks_count: i64,
+    pub open_issues_count: i64,
+}
+
+
+#[derive(Deserialize)]
+pub struct QueryResponse {
+    pub total_count: i32,
+    pub incomplete_results: bool,
+    pub items: Vec<Repo>
+}
+
+pub fn send_request(q: &Query) -> io::Result<QueryResponse> {
+    let url = ENDPOINT.to_string() + &q.to_url().unwrap();
+    let resp = ureq::get(&url)
+        .set("User-Agent", "Keating950/gitsearch-rs")
+        .send_string("");
+    resp.into_json_deserialize::<QueryResponse>()
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::query::*;
+    #[test]
+    fn test_send_request() {
+        let q = Query {
+            query: "foobar".to_string(),
+            sort: Sort::BestMatch,
+            ascending: false,
+            language: None,
+        };
+        match send_request(&q) {
+            Ok(_) => eprintln!("Deserialized ok"),
+            Err(e) => eprintln!("{:?}", e)
+        };
     }
 }

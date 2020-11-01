@@ -3,10 +3,8 @@
 #![allow(unused_variables)]
 use clap::{App, Arg};
 use cursive::views::{Dialog, TextView};
-mod types;
-mod request;
-
-use crate::types::*;
+mod query;
+use crate::query::*;
 
 fn main() {
     macro_rules! parse_arg {
@@ -61,12 +59,13 @@ fn main() {
     let asc: bool = parse_arg!(matches, "ascending", false);
     let lang = match matches.value_of("language") {
         Some(s) => Some(s.to_string()),
-        None => None
+        None => None,
     };
     let query = Query {
         query: matches.value_of("query").unwrap().to_string(),
         sort: sort_type,
         ascending: asc,
-        language: lang
+        language: lang,
     };
 }
+
