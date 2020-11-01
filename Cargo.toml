@@ -1,0 +1,12 @@
+[package]
+name = "gitsearch"
+version = "0.1.0"
+authors = ["Keating950 <keating.reid@protonmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+cursive = "0"
+clap = "2"
+ureq = { version = "1", features = ["json"] }
