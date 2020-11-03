@@ -1,31 +1,14 @@
+use crate::repo::Repo;
 use serde::{de, Deserialize, Deserializer};
 use serde_json::Value;
-use std::{io, str::FromStr, mem::replace};
-use crate::request::ENDPOINT;
+use std::{error::Error, io, mem::replace, str::FromStr};
+use ureq;
 
-pub trait ToQueryUrl {
+pub trait QueryEncode {
     fn to_url(&self) -> Option<String>;
 }
 
-pub trait StringExt {
-    fn concat_if_some(&mut self, other: Option<String>) -> Self;
-}
-
-impl StringExt for String {
-    fn concat_if_some(&mut self, other: Option<String>) -> Self {
-        match other {
-            Some(s) =>  {
-                let mut new = String::with_capacity(self.len() + s.len());
-                new += self;
-                new += &s;
-                std::mem::replace(self, new)
-            },
-            None => self.to_string()
-        }
-    }
-}
-
-impl ToQueryUrl for String {
+impl QueryEncode for String {
     fn to_url(&self) -> Option<String> {
         Some(self.split_whitespace().collect::<Vec<&str>>().join("+"))
     }
@@ -54,21 +37,14 @@ impl FromStr for Sort {
     }
 }
 
-impl ToQueryUrl for Sort {
+impl QueryEncode for Sort {
     fn to_url(&self) -> Option<String> {
-        if *self == Sort::BestMatch {
-            None
-        } else {
-            Some(
-                match self {
-                    Sort::BestMatch => unreachable!(),
-                    Sort::Stars => "sort=stars",
-                    Sort::Forks => "sort=forks",
-                    Sort::Issues => "sort=help-wanted-issues",
-                    Sort::Updated => "sort=updated",
-                }
-                .to_string(),
-            )
+        match self {
+            Sort::BestMatch => None,
+            Sort::Stars => Some("sort=stars".to_string()),
+            Sort::Forks => Some("sort=forks".to_string()),
+            Sort::Issues => Some("sort=help-wanted-issues".to_string()),
+            Sort::Updated => Some("sort=updated".to_string()),
         }
     }
 }
@@ -80,45 +56,39 @@ pub struct Query {
     pub language: Option<String>,
 }
 
-impl ToQueryUrl for Query {
+impl QueryEncode for Query {
     fn to_url(&self) -> Option<String> {
         let mut query: String = "?q=".to_string() + &self.query.to_url().unwrap();
-        match &self.language {
-            Some(l) => { query += &format!("+language:{}", l.to_url().unwrap()); }
-            None => (),
-        };
-        query.concat_if_some(self.sort.to_url());
-        if self.ascending { query += "&order=asc" }
+        if let Some(l) = &self.language {
+            query += &format!("+language:{}", l.to_url().unwrap());
+        }
+        if let Some(s) = &self.sort.to_url() {
+            query += s
+        }
+        if self.ascending {
+            query += "&order=asc"
+        }
         Some(query)
     }
 }
 
-#[derive(Deserialize)]
-pub struct Repo {
-    pub id: u64,
-    pub full_name: String,
-    pub url: String,
-    pub description: Option<String>,
-    pub stargazers_count: i64,
-    pub language: Option<String>,
-    pub forks_count: i64,
-    pub open_issues_count: i64,
+impl Query {
+    pub fn send(&self) -> io::Result<QueryResponse> {
+        const ENDPOINT: &'static str = "https://api.github.com/search/repositories";
+        const APP_USER_AGENT: &'static str = "Keating950/gitsearch-rs";
+        let url = ENDPOINT.to_string() + &self.to_url().unwrap();
+        ureq::get(&url)
+            .set("User-Agent", APP_USER_AGENT)
+            .send_bytes(&[])
+            .into_json_deserialize()
+    }
 }
-
 
 #[derive(Deserialize)]
 pub struct QueryResponse {
     pub total_count: i32,
     pub incomplete_results: bool,
-    pub items: Vec<Repo>
-}
-
-pub fn send_request(q: &Query) -> io::Result<QueryResponse> {
-    let url = ENDPOINT.to_string() + &q.to_url().unwrap();
-    let resp = ureq::get(&url)
-        .set("User-Agent", "Keating950/gitsearch-rs")
-        .send_string("");
-    resp.into_json_deserialize::<QueryResponse>()
+    pub items: Vec<Repo>,
 }
 
 #[cfg(test)]
@@ -132,9 +102,9 @@ mod tests {
             ascending: false,
             language: None,
         };
-        match send_request(&q) {
+        match q.send() {
             Ok(_) => eprintln!("Deserialized ok"),
-            Err(e) => eprintln!("{:?}", e)
+            Err(e) => eprintln!("{:?}", e),
         };
     }
 }
