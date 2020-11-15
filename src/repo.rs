@@ -1,6 +1,14 @@
-use cursive::{align::HAlign, view::View, views::*, Printer};
+use cursive::{
+    align::HAlign,
+    theme::{BaseColor, Color, Effect, Style},
+    utils::span::SpannedString,
+    view::{View, SizeConstraint},
+    views::*,
+    traits::Resizable
+};
 use serde::Deserialize;
 use std::fmt;
+use crate::ui;
 
 #[derive(Deserialize)]
 pub struct Repo {
@@ -13,20 +21,47 @@ pub struct Repo {
     pub forks_count: i64,
     pub open_issues_count: i64,
 }
-impl Repo {
-    pub fn add_to_view(&self, list: &mut ListView) {
-    }
-}
+
+pub type RepoView = PaddedView<ResizedView<TextView>>;
 
 impl fmt::Display for Repo {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.full_name)?;
         if let Some(desc) = &self.description {
-            write!(f, "\n{}", desc)?
+            write!(f, "\t{}", desc)?
         }
-        write!(f, "\n🟊 {}", self.stargazers_count)
+        write!(f, "\t🟊 {}", self.stargazers_count)
     }
 }
+
+impl Repo {
+    fn styled(&self) -> SpannedString<Style> {
+        let title_style = Style::from(Color::Dark(BaseColor::Black));
+        let mut buf = SpannedString::styled(
+            self.full_name.clone(),
+            title_style,
+        );
+        buf.append_plain(format!("    🟊 {}", self.stargazers_count));
+        if let Some(desc) = &self.description {
+            buf.append_plain(format!("\n{}", desc));
+        }
+        buf
+    }
+
+    pub fn to_view(&self) -> RepoView {
+        const MAX_WIDTH: usize = 80;
+        let content: SpannedString<Style> = self.styled();
+        PaddedView::lrtb(
+            0, 0, 0, 1,
+            Resizable::resized(
+                TextView::new(content),
+                SizeConstraint::Fixed(MAX_WIDTH),
+                SizeConstraint::Free,
+            )
+        )
+    }
+}
+
 
 mod tests {
     use crate::repo::Repo;

@@ -5,13 +5,18 @@
 extern crate clap;
 use clap::{App, Arg};
 use cursive::{
-    align::HAlign,
-    views::{Dialog, ListView, TextView},
     Cursive,
+    align::HAlign,
+    theme::{Effect, Style},
+    traits::Resizable,
+    utils::span::SpannedString,
+    view::SizeConstraint,
+    views::{Dialog, ListView, TextView},
 };
 use std::error::Error;
 mod query;
 mod repo;
+mod ui;
 use crate::query::*;
 
 type BoxError<T> = Result<T, Box<dyn Error>>;
@@ -71,17 +76,17 @@ fn main() -> BoxError<()> {
         Some(s) => Some(s.to_string()),
         None => None,
     };
-    let results = Query {
+    let mut results = Query {
         query: matches.value_of("query").unwrap().to_string(),
         sort: sort_type,
         ascending: asc,
         language: lang,
     }
-    .send().unwrap();
+    .send()
+    .unwrap();
     let mut siv = cursive::default();
-    let mut list = ListView::new();
-    results.items[0].add_to_view(&mut list);
-    siv.add_layer(list);
+    let page = ui::create_page(&mut results.items);
+    siv.add_layer(page);
     siv.run();
     Ok(())
 }
